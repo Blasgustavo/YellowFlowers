@@ -1,0 +1,995 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>⭐Una Flor, para otra...⭐</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Caveat:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap");
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: #030208;
+        background-image:
+          linear-gradient(rgba(3, 2, 8, 0.75), rgba(3, 2, 8, 0.75)),
+          url("https://images.pexels.com/photos/13344256/pexels-photo-13344256.jpeg");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        font-family: "Plus Jakarta Sans", sans-serif;
+        color: #ffffff;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        cursor: grab;
+      }
+
+      canvas:active {
+        cursor: grabbing;
+      }
+
+      .ui-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 16px;
+      }
+
+      .header-glow {
+        text-shadow:
+          0 0 15px rgba(255, 215, 0, 0.8),
+          0 0 30px rgba(255, 140, 0, 0.5);
+        font-family: "Caveat", cursive;
+      }
+
+      .glass-card {
+        background: rgba(15, 12, 28, 0.88);
+        border: 1px solid rgba(255, 215, 0, 0.45);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        box-shadow: 0 0 30px rgba(255, 180, 0, 0.25);
+      }
+
+      .quote-card-anim {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.92);
+        transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        pointer-events: none;
+      }
+
+      .quote-card-anim.active {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+      }
+
+      .btn-hover {
+        transition: all 0.2s ease-in-out;
+      }
+      .btn-hover:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+      }
+    </style>
+  </head>
+  <body class="bg-black text-white">
+    <canvas id="spaceCanvas"></canvas>
+
+    <!-- Música de fondo (YouTube embebido). Solo suena al abrir este archivo
+         en un navegador normal; el visor de vista previa de Claude la bloquea. -->
+    <iframe
+      id="bgMusic"
+      src="https://www.youtube.com/embed/XitWjQySx1Q?autoplay=1&loop=1&playlist=XitWjQySx1Q&controls=0"
+      allow="autoplay"
+      style="
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      "
+      frameborder="0"
+    ></iframe>
+
+    <div class="ui-container">
+      <!-- Header -->
+      <div class="header text-center mt-2 pointer-events-auto">
+        <h1
+          class="header-glow text-3xl sm:text-5xl font-bold text-yellow-300 tracking-wide"
+        >
+          ⭐Una Flor, para otra...⭐
+        </h1>
+        <p
+          class="text-xs sm:text-sm text-yellow-200/80 tracking-widest uppercase font-semibold mt-1"
+        >
+          JHOVANA
+        </p>
+      </div>
+
+      <!-- Central Interactive Quote Modal -->
+      <div
+        id="quoteCard"
+        class="glass-card quote-card-anim self-center max-w-md w-11/12 rounded-2xl p-6 text-center my-auto"
+      >
+        <div class="text-4xl mb-2" id="cardIcon">🌻</div>
+        <h3
+          id="cardTitle"
+          class="text-yellow-400 font-bold text-xl sm:text-2xl mb-2 font-serif"
+        >
+          Girasol Estelar
+        </h3>
+        <p
+          id="cardText"
+          class="text-yellow-100/90 text-base sm:text-lg italic font-light leading-relaxed"
+        >
+          "Miras lo bueno, como el girasol busca al sol."
+        </p>
+      </div>
+
+      <!-- Bottom Interactive Controls & Guidance -->
+      <div class="footer-info pb-2 pointer-events-none"></div>
+    </div>
+
+    <script>
+      (() => {
+        "use strict";
+
+        const canvas = document.getElementById("spaceCanvas");
+        const ctx = canvas.getContext("2d");
+
+        let width = (canvas.width = window.innerWidth);
+        let height = (canvas.height = window.innerHeight);
+
+        window.addEventListener("resize", () => {
+          width = canvas.width = window.innerWidth;
+          height = canvas.height = window.innerHeight;
+        });
+
+        // --- 3D CAMERA CONTROLLER ---
+        // Default pitch set to 0.75 (~43 deg tilt) to clearly separate orbits in 3D perspective
+        let camera = {
+          rotX: 0.75,
+          rotY: 0.2,
+          targetRotX: 0.75,
+          targetRotY: 0.2,
+          zoom: 0.85,
+          targetZoom: 0.85,
+          fov: 750,
+          showOrbits: true,
+        };
+
+        let isDragging = false;
+        let lastMouseX = 0,
+          lastMouseY = 0;
+
+        canvas.addEventListener("mousedown", (e) => {
+          isDragging = true;
+          lastMouseX = e.clientX;
+          lastMouseY = e.clientY;
+        });
+
+        window.addEventListener("mouseup", () => (isDragging = false));
+
+        canvas.addEventListener("mousemove", (e) => {
+          if (isDragging) {
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+            camera.targetRotY += dx * 0.005;
+            camera.targetRotX += dy * 0.005;
+            // Clamp tilt pitch so it stays 3D without flipping upside down
+            camera.targetRotX = Math.max(
+              -1.3,
+              Math.min(1.3, camera.targetRotX),
+            );
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+          }
+        });
+
+        // Mobile Touch Controls
+        canvas.addEventListener(
+          "touchstart",
+          (e) => {
+            if (e.touches.length === 1) {
+              isDragging = true;
+              lastMouseX = e.touches[0].clientX;
+              lastMouseY = e.touches[0].clientY;
+            }
+          },
+          { passive: true },
+        );
+
+        canvas.addEventListener("touchend", () => (isDragging = false));
+
+        canvas.addEventListener(
+          "touchmove",
+          (e) => {
+            if (isDragging && e.touches.length === 1) {
+              const dx = e.touches[0].clientX - lastMouseX;
+              const dy = e.touches[0].clientY - lastMouseY;
+              camera.targetRotY += dx * 0.005;
+              camera.targetRotX += dy * 0.005;
+              camera.targetRotX = Math.max(
+                -1.3,
+                Math.min(1.3, camera.targetRotX),
+              );
+              lastMouseX = e.touches[0].clientX;
+              lastMouseY = e.touches[0].clientY;
+            }
+          },
+          { passive: true },
+        );
+
+        canvas.addEventListener(
+          "wheel",
+          (e) => {
+            camera.targetZoom -= e.deltaY * 0.001;
+            camera.targetZoom = Math.max(0.3, Math.min(2.5, camera.targetZoom));
+          },
+          { passive: true },
+        );
+
+        function project3D(x, y, z) {
+          // 1. Rotate around Y axis
+          let cosY = Math.cos(camera.rotY),
+            sinY = Math.sin(camera.rotY);
+          let x1 = x * cosY + z * sinY;
+          let y1 = y;
+          let z1 = -x * sinY + z * cosY;
+
+          // 2. Rotate around X axis
+          let cosX = Math.cos(camera.rotX),
+            sinX = Math.sin(camera.rotX);
+          let x2 = x1;
+          let y2 = y1 * cosX - z1 * sinX;
+          let z2 = y1 * sinX + z1 * cosX;
+
+          // 3. Perspective Projection
+          let distance = 950;
+          let depth = distance + z2;
+
+          // Guard against points passing behind or too close to camera focal plane
+          if (depth < 40) {
+            return { screenX: 0, screenY: 0, scale: 0, z: z2, clipped: true };
+          }
+
+          let scale = (camera.fov * camera.zoom) / depth;
+
+          return {
+            screenX: width / 2 + x2 * scale,
+            screenY: height / 2 + y2 * scale,
+            scale: scale,
+            z: z2,
+            clipped: false,
+          };
+        }
+
+        function drawFlowerPlanet(ctx, type, baseSize) {
+          let size = Math.max(2, baseSize);
+          ctx.save();
+          switch (type) {
+            case "mercury": // Margarita Silvestre
+              for (let i = 0; i < 8; i++) {
+                ctx.rotate(Math.PI / 4);
+                ctx.fillStyle = "#ffb700";
+                ctx.beginPath();
+                ctx.ellipse(
+                  0,
+                  -size * 0.6,
+                  Math.max(0.1, size * 0.25),
+                  Math.max(0.1, size * 0.6),
+                  0,
+                  0,
+                  Math.PI * 2,
+                );
+                ctx.fill();
+              }
+              ctx.fillStyle = "#ffff66";
+              ctx.beginPath();
+              ctx.arc(0, 0, Math.max(0.1, size * 0.35), 0, Math.PI * 2);
+              ctx.fill();
+              break;
+
+            case "venus": // Rosa Dorada
+              for (let i = 0; i < 10; i++) {
+                ctx.rotate(Math.PI / 5);
+                ctx.fillStyle = "#ffd700";
+                ctx.beginPath();
+                ctx.arc(
+                  0,
+                  -size * 0.5,
+                  Math.max(0.1, size * 0.4),
+                  0,
+                  Math.PI * 2,
+                );
+                ctx.fill();
+              }
+              ctx.fillStyle = "#ff8c00";
+              ctx.beginPath();
+              ctx.arc(0, 0, Math.max(0.1, size * 0.3), 0, Math.PI * 2);
+              ctx.fill();
+              break;
+
+            case "earth": // Girasol Cósmico
+              for (let i = 0; i < 14; i++) {
+                ctx.rotate((Math.PI * 2) / 14);
+                ctx.fillStyle = "#ffcc00";
+                ctx.beginPath();
+                ctx.ellipse(
+                  0,
+                  -size * 0.7,
+                  Math.max(0.1, size * 0.2),
+                  Math.max(0.1, size * 0.7),
+                  0,
+                  0,
+                  Math.PI * 2,
+                );
+                ctx.fill();
+              }
+              ctx.fillStyle = "#5c3a21";
+              ctx.beginPath();
+              ctx.arc(0, 0, Math.max(0.1, size * 0.45), 0, Math.PI * 2);
+              ctx.fill();
+              break;
+
+            case "mars": // Flor de Fuego
+              for (let i = 0; i < 6; i++) {
+                ctx.rotate(Math.PI / 3);
+                ctx.fillStyle = "#ff5500";
+                ctx.beginPath();
+                ctx.arc(
+                  0,
+                  -size * 0.5,
+                  Math.max(0.1, size * 0.45),
+                  0,
+                  Math.PI * 2,
+                );
+                ctx.fill();
+              }
+              ctx.fillStyle = "#ffe600";
+              ctx.beginPath();
+              ctx.arc(0, 0, Math.max(0.1, size * 0.25), 0, Math.PI * 2);
+              ctx.fill();
+              break;
+
+            case "jupiter": // Loto Gigante
+              for (let l = 3; l >= 1; l--) {
+                let count = l * 8;
+                for (let i = 0; i < count; i++) {
+                  ctx.rotate((Math.PI * 2) / count);
+                  ctx.fillStyle =
+                    l === 3 ? "#e67300" : l === 2 ? "#ffbb00" : "#fff5b8";
+                  ctx.beginPath();
+                  ctx.ellipse(
+                    0,
+                    -size * 0.5 * (l / 3),
+                    Math.max(0.1, size * 0.22 * (l / 3)),
+                    Math.max(0.1, size * 0.5 * (l / 3)),
+                    0,
+                    0,
+                    Math.PI * 2,
+                  );
+                  ctx.fill();
+                }
+              }
+              ctx.fillStyle = "#ffcc00";
+              ctx.beginPath();
+              ctx.arc(0, 0, Math.max(0.1, size * 0.3), 0, Math.PI * 2);
+              ctx.fill();
+              break;
+
+            case "saturn": // Flor Corona con Anillo de Luz
+              ctx.save();
+              ctx.scale(1, 0.35);
+              ctx.beginPath();
+              ctx.arc(0, 0, Math.max(0.1, size * 1.8), 0, Math.PI * 2);
+              ctx.strokeStyle = "rgba(255, 215, 0, 0.85)";
+              ctx.lineWidth = Math.max(1, size * 0.3);
+              ctx.stroke();
+              ctx.restore();
+              for (let i = 0; i < 8; i++) {
+                ctx.rotate(Math.PI / 4);
+                ctx.fillStyle = "#ffea00";
+                ctx.beginPath();
+                ctx.ellipse(
+                  0,
+                  -size * 0.6,
+                  Math.max(0.1, size * 0.25),
+                  Math.max(0.1, size * 0.6),
+                  0,
+                  0,
+                  Math.PI * 2,
+                );
+                ctx.fill();
+              }
+              ctx.fillStyle = "#b38600";
+              ctx.beginPath();
+              ctx.arc(0, 0, Math.max(0.1, size * 0.3), 0, Math.PI * 2);
+              ctx.fill();
+              break;
+
+            case "uranus": // Diente de León Celeste
+              for (let i = 0; i < 12; i++) {
+                ctx.rotate((Math.PI * 2) / 12);
+                ctx.fillStyle = "#00f0ff";
+                ctx.beginPath();
+                ctx.ellipse(
+                  0,
+                  -size * 0.6,
+                  Math.max(0.1, size * 0.15),
+                  Math.max(0.1, size * 0.6),
+                  0,
+                  0,
+                  Math.PI * 2,
+                );
+                ctx.fill();
+              }
+              ctx.fillStyle = "#ffffff";
+              ctx.beginPath();
+              ctx.arc(0, 0, Math.max(0.1, size * 0.25), 0, Math.PI * 2);
+              ctx.fill();
+              break;
+
+            case "neptune": // Orquídea Azul
+              for (let i = 0; i < 6; i++) {
+                ctx.rotate(Math.PI / 3);
+                ctx.fillStyle = "#1e90ff";
+                ctx.beginPath();
+                ctx.ellipse(
+                  0,
+                  -size * 0.6,
+                  Math.max(0.1, size * 0.3),
+                  Math.max(0.1, size * 0.6),
+                  0,
+                  0,
+                  Math.PI * 2,
+                );
+                ctx.fill();
+              }
+              ctx.fillStyle = "#ffd700";
+              ctx.beginPath();
+              ctx.arc(0, 0, Math.max(0.1, size * 0.25), 0, Math.PI * 2);
+              ctx.fill();
+              break;
+
+            case "pluto": // Flor Estrellada
+              for (let i = 0; i < 5; i++) {
+                ctx.rotate((Math.PI * 2) / 5);
+                ctx.fillStyle = "#e6a1ff";
+                ctx.beginPath();
+                ctx.ellipse(
+                  0,
+                  -size * 0.5,
+                  Math.max(0.1, size * 0.25),
+                  Math.max(0.1, size * 0.5),
+                  0,
+                  0,
+                  Math.PI * 2,
+                );
+                ctx.fill();
+              }
+              ctx.fillStyle = "#ffff00";
+              ctx.beginPath();
+              ctx.arc(0, 0, Math.max(0.1, size * 0.2), 0, Math.PI * 2);
+              ctx.fill();
+              break;
+          }
+          ctx.restore();
+        }
+
+        const phrases = [
+          "Tu cariño no pasa de moda 🌻",
+          "El campo entero florece para ti 🌼",
+          "Miras lo bueno, como el girasol ☀️",
+          "21 de septiembre, contigo siempre ✨",
+          "Esta flor guarda un abrazo para ti 🌸",
+          "Contigo hasta lo simple es bonito 💖",
+          "Hoy el amarillo lleva tu nombre 💛",
+          "Gracias por ser mi sol de siempre 🌞",
+          "Un girasol para quien ilumina con cariño 💫",
+          "Apareces cuando más hace falta 🌟",
+          "Tu sonrisa le hace bien a mis días 😊",
+          "Gracias por sumar luz a mis días 🌻",
+          "Que esta primavera te traiga calma 🌱",
+          "El aire nuevo también huele a ti 🍃",
+          "Un poco de sol, un poco de ti 🌤️",
+          "Las flores nuevas también son para ti 🌷",
+          "Que este cambio de estación te sonría 🌾",
+          "Primavera contigo, todo florece mejor 🌿",
+          "Cada brote nuevo también piensa en ti 🌱",
+          "Que el tiempo pase suave, como esta tarde 🍃",
+          "Hay calma en lo simple, como hoy 🌤️",
+          "Que la primavera te encuentre en paz 🌼",
+          "Un día más, un motivo más para sonreír 🌻",
+          "Lo bueno también llega despacio, como las flores 🌷",
+          "Que este nuevo tiempo te haga bien 🌾",
+          "Pequeñas cosas, grandes cariños 💛",
+          "Que el sol de estos días te acompañe 🌞",
+          "Todo florece a su tiempo, como tú 🌸",
+        ];
+
+        // 1. PLANETS DATA
+        // "incl" = inclinación del plano orbital (en radianes). Cada planeta orbita
+        // en un plano distinto, como en un sistema solar real, para que el conjunto
+        // se lea como un volumen 3D y no como un disco plano visto en ángulo.
+        // "name" ahora coincide con la flor que realmente se dibuja (ver drawFlowerPlanet).
+        const planets = [
+          {
+            type: "mercury",
+            name: "Margarita Silvestre",
+            r: 160,
+            speed: 0.014,
+            incl: 0.55,
+            size: 12,
+            phrase: phrases[0],
+          },
+          {
+            type: "venus",
+            name: "Rosa Dorada",
+            r: 230,
+            speed: -0.01,
+            incl: -0.35,
+            size: 16,
+            phrase: phrases[1],
+          },
+          {
+            type: "earth",
+            name: "Girasol Cósmico",
+            r: 310,
+            speed: 0.008,
+            incl: 0.15,
+            size: 18,
+            phrase: phrases[2],
+          },
+          {
+            type: "mars",
+            name: "Flor de Fuego",
+            r: 390,
+            speed: -0.0065,
+            incl: -0.5,
+            size: 14,
+            phrase: phrases[3],
+          },
+          {
+            type: "jupiter",
+            name: "Loto Gigante",
+            r: 520,
+            speed: 0.0045,
+            incl: 0.3,
+            size: 26,
+            phrase: phrases[4],
+          },
+          {
+            type: "saturn",
+            name: "Corona Solar",
+            r: 640,
+            speed: -0.0035,
+            incl: -0.2,
+            size: 22,
+            phrase: phrases[5],
+          },
+          {
+            type: "uranus",
+            name: "Diente de León Celeste",
+            r: 750,
+            speed: 0.0028,
+            incl: 0.45,
+            size: 18,
+            phrase: phrases[6],
+          },
+          {
+            type: "neptune",
+            name: "Orquídea Azul",
+            r: 860,
+            speed: -0.0022,
+            incl: -0.28,
+            size: 18,
+            phrase: phrases[7],
+          },
+          {
+            type: "pluto",
+            name: "Flor Estelar",
+            r: 960,
+            speed: 0.0018,
+            incl: 0.6,
+            size: 12,
+            phrase: phrases[8],
+          },
+        ].map((p, i) => ({ ...p, angle: (i * Math.PI * 2) / 9 }));
+
+        // 2. PHRASE SATELLITES (Distributed across distinct radii and vertical 3D Y-heights to eliminate overlap)
+        const phraseNodes = phrases.map((phrase, i) => {
+          return {
+            text: phrase,
+            r: 200 + i * 36,
+            angle: (i * Math.PI * 2) / phrases.length + 0.5,
+            yOffset: Math.sin(i * 1.8) * 75, // 3D Elevation variance
+            speed: (0.0025 + (i % 3) * 0.0008) * (i % 2 === 0 ? 1 : -1),
+          };
+        });
+
+        // 3. GOLDEN ASTEROID BELT "JHOVANA"
+        // Varios anillos del nombre, a distintos radios/inclinaciones/velocidades,
+        // para poblar la escena con muchas más letras orbitando en 3D real.
+        const nameRings = [
+          { r: 450, incl: 0, speedMul: 1 },
+          { r: 360, incl: 0.3, speedMul: -0.75 },
+          { r: 560, incl: -0.22, speedMul: 0.5 },
+          { r: 680, incl: 0.15, speedMul: -0.35 },
+        ];
+        const nameChars = [];
+        nameRings.forEach((ring, ringIdx) => {
+          const letters = "JHOVANA".split("");
+          letters.forEach((char, i) => {
+            nameChars.push({
+              char: char,
+              r: ring.r,
+              incl: ring.incl,
+              speedMul: ring.speedMul,
+              baseAngle: (i * Math.PI * 2) / letters.length + ringIdx * 0.35,
+            });
+          });
+        });
+
+        // 4. BACKGROUND 3D STARS
+        const stars = Array.from({ length: 180 }, () => ({
+          x: (Math.random() - 0.5) * 3500,
+          y: (Math.random() - 0.5) * 3500,
+          z: (Math.random() - 0.5) * 3500,
+          size: Math.random() * 1.8 + 0.5,
+        }));
+
+        window.closeQuoteCard = function () {
+          document.getElementById("quoteCard").classList.remove("active");
+        };
+
+        canvas.addEventListener("click", (e) => {
+          const mx = e.clientX,
+            my = e.clientY;
+          let clickedItem = null;
+
+          // Check click on Planets
+          planets.forEach((p) => {
+            if (p.lastScreen && !p.lastScreen.clipped) {
+              let dist = Math.hypot(p.lastScreen.x - mx, p.lastScreen.y - my);
+              if (dist < p.size * p.lastScreen.scale * 2.5 + 12) {
+                clickedItem = {
+                  title: p.name,
+                  text: `"${p.phrase}"`,
+                  icon: "🌻",
+                };
+              }
+            }
+          });
+
+          // Check click on Phrase Satellites
+          if (!clickedItem) {
+            phraseNodes.forEach((pn) => {
+              if (pn.lastScreen && !pn.lastScreen.clipped) {
+                let dist = Math.hypot(
+                  pn.lastScreen.x - mx,
+                  pn.lastScreen.y - my,
+                );
+                if (dist < 45 * pn.lastScreen.scale + 12) {
+                  clickedItem = {
+                    title: "Mensaje de la Galaxia",
+                    text: `"${pn.text}"`,
+                    icon: "✨",
+                  };
+                }
+              }
+            });
+          }
+
+          // Check click on JHOVANA Letters
+          if (!clickedItem) {
+            nameChars.forEach((nc) => {
+              if (nc.lastScreen && !nc.lastScreen.clipped) {
+                let dist = Math.hypot(
+                  nc.lastScreen.x - mx,
+                  nc.lastScreen.y - my,
+                );
+                if (dist < 30 * nc.lastScreen.scale + 10) {
+                  clickedItem = {
+                    title: `Letra ${nc.char}`,
+                    text: `"Jhovana — Tu luz hace florecer la galaxia entera."`,
+                    icon: "💛",
+                  };
+                }
+              }
+            });
+          }
+
+          if (clickedItem) {
+            document.getElementById("cardIcon").innerText = clickedItem.icon;
+            document.getElementById("cardTitle").innerText = clickedItem.title;
+            document.getElementById("cardText").innerText = clickedItem.text;
+            document.getElementById("quoteCard").classList.add("active");
+          } else {
+            // Clic fuera de cualquier astro/frase: si el popup está abierto, se cierra
+            window.closeQuoteCard();
+          }
+        });
+
+        let time = 0;
+
+        function render() {
+          requestAnimationFrame(render);
+          time += 0.015;
+
+          // Smooth Camera Interpolation
+          camera.rotX += (camera.targetRotX - camera.rotX) * 0.08;
+          camera.rotY += (camera.targetRotY - camera.rotY) * 0.08;
+          camera.zoom += (camera.targetZoom - camera.zoom) * 0.08;
+
+          ctx.clearRect(0, 0, width, height);
+
+          // 1. RENDER BACKGROUND STARS
+          ctx.fillStyle = "#ffffff";
+          stars.forEach((s) => {
+            const proj = project3D(s.x, s.y, s.z);
+            if (
+              !proj.clipped &&
+              proj.screenX > 0 &&
+              proj.screenX < width &&
+              proj.screenY > 0 &&
+              proj.screenY < height
+            ) {
+              const starRadius = Math.max(0.1, s.size * proj.scale);
+              ctx.globalAlpha = Math.min(
+                0.85,
+                Math.max(0.15, proj.scale * 0.4),
+              );
+              ctx.beginPath();
+              ctx.arc(proj.screenX, proj.screenY, starRadius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          });
+          ctx.globalAlpha = 1;
+
+          // 2. RENDER 3D ORBITAL GUIDE LINES (solo para los planetas)
+          if (camera.showOrbits) {
+            ctx.lineWidth = 1;
+            // Draw Planet Orbits (each ring uses the SAME inclination as its planet
+            // so the guide line always matches the real 3D path travelled)
+            planets.forEach((p) => {
+              ctx.beginPath();
+              ctx.strokeStyle = "rgba(255, 215, 0, 0.12)";
+              for (let a = 0; a <= Math.PI * 2 + 0.1; a += 0.12) {
+                let ox = Math.cos(a) * p.r;
+                let oz0 = Math.sin(a) * p.r;
+                let oy = oz0 * Math.sin(p.incl);
+                let oz = oz0 * Math.cos(p.incl);
+                let oProj = project3D(ox, oy, oz);
+                if (!oProj.clipped) {
+                  if (a === 0) ctx.moveTo(oProj.screenX, oProj.screenY);
+                  else ctx.lineTo(oProj.screenX, oProj.screenY);
+                }
+              }
+              ctx.stroke();
+            });
+          }
+
+          // 3. COLLECT ALL 3D OBJECTS FOR REAL Z-DEPTH SORTING
+          const renderList = [];
+          const sunRadiusWorld = 140;
+
+          // A) CENTRAL SUN (El Sol de Flores)
+          renderList.push({
+            z: 0,
+            draw: () => {
+              const proj = project3D(0, 0, 0);
+              if (proj.clipped) return;
+
+              const r = Math.max(2, sunRadiusWorld * proj.scale);
+              const outerGlowR = Math.max(r + 1, r * 2.8);
+
+              // Warm radial outer aura
+              const glow = ctx.createRadialGradient(
+                proj.screenX,
+                proj.screenY,
+                Math.max(0.1, r * 0.2),
+                proj.screenX,
+                proj.screenY,
+                outerGlowR,
+              );
+              glow.addColorStop(0, "rgba(255, 215, 0, 0.85)");
+              glow.addColorStop(0.5, "rgba(255, 120, 0, 0.4)");
+              glow.addColorStop(1, "rgba(255, 60, 0, 0)");
+              ctx.fillStyle = glow;
+              ctx.beginPath();
+              ctx.arc(proj.screenX, proj.screenY, outerGlowR, 0, Math.PI * 2);
+              ctx.fill();
+
+              // 3D Sun Sphere
+              const sunGrad = ctx.createRadialGradient(
+                proj.screenX - r * 0.3,
+                proj.screenY - r * 0.3,
+                Math.max(0.1, r * 0.1),
+                proj.screenX,
+                proj.screenY,
+                r,
+              );
+              sunGrad.addColorStop(0, "#ffffff");
+              sunGrad.addColorStop(0.25, "#ffea75");
+              sunGrad.addColorStop(0.7, "#ff8000");
+              sunGrad.addColorStop(1, "#993d00");
+              ctx.fillStyle = sunGrad;
+              ctx.beginPath();
+              ctx.arc(proj.screenX, proj.screenY, r, 0, Math.PI * 2);
+              ctx.fill();
+            },
+          });
+
+          // B) PLANETS
+          planets.forEach((p) => {
+            p.angle += p.speed;
+            // Órbita plana en el plano local (x, z0)...
+            let x = Math.cos(p.angle) * p.r;
+            let z0 = Math.sin(p.angle) * p.r;
+            // ...inclinada según "incl" para que cada planeta viva en su propio
+            // plano orbital 3D, en vez de que todos compartan el plano y=0.
+            let y = z0 * Math.sin(p.incl);
+            let z = z0 * Math.cos(p.incl);
+
+            const proj = project3D(x, y, z);
+            p.lastScreen = {
+              x: proj.screenX,
+              y: proj.screenY,
+              scale: proj.scale,
+              clipped: proj.clipped,
+            };
+
+            renderList.push({
+              z: proj.z,
+              draw: () => {
+                if (proj.clipped) return;
+                // Sun occlusion
+                if (proj.z > 10 && Math.hypot(x, y) < sunRadiusWorld * 0.9)
+                  return;
+
+                ctx.save();
+                ctx.translate(proj.screenX, proj.screenY);
+                ctx.scale(proj.scale, proj.scale);
+
+                drawFlowerPlanet(ctx, p.type, p.size);
+
+                // Planet Name Label
+                ctx.font = "600 10px 'Plus Jakarta Sans', sans-serif";
+                ctx.fillStyle = "rgba(255, 235, 160, 0.9)";
+                ctx.textAlign = "center";
+                ctx.fillText(p.name, 0, p.size * 1.4 + 10);
+
+                ctx.restore();
+              },
+            });
+          });
+
+          // C) PHRASE SATELLITES (Pill nodes with background, distinct Y spacing)
+          phraseNodes.forEach((pn) => {
+            pn.angle += pn.speed;
+            let x = Math.cos(pn.angle) * pn.r;
+            let z = Math.sin(pn.angle) * pn.r;
+            let y = pn.yOffset;
+
+            const proj = project3D(x, y, z);
+            pn.lastScreen = {
+              x: proj.screenX,
+              y: proj.screenY,
+              scale: proj.scale,
+              clipped: proj.clipped,
+            };
+
+            renderList.push({
+              z: proj.z,
+              draw: () => {
+                if (proj.clipped) return;
+                if (proj.z > 10 && Math.hypot(x, y) < sunRadiusWorld * 1.05)
+                  return;
+
+                let alpha = Math.min(
+                  1,
+                  Math.max(0.28, (proj.scale - 0.25) * 1.4),
+                );
+                let fontSize = Math.max(13, Math.min(18, 17 * proj.scale));
+
+                // Texto sin cuadro/fondo, con un resplandor sutil y tenue —
+                // mismo espíritu que el título pero bajado de intensidad.
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.font = `700 ${fontSize}px 'Caveat', cursive, serif`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+
+                ctx.shadowColor = "rgba(255, 200, 140, 0.4)";
+                ctx.shadowBlur = proj.z < 0 ? 9 : 5;
+                ctx.fillStyle = proj.z < 0 ? "#fff6e4" : "#f3d99a";
+                ctx.fillText(pn.text, proj.screenX, proj.screenY);
+
+                ctx.restore();
+              },
+            });
+          });
+
+          // D) GOLDEN "JHOVANA" RINGS (multiple, tilted, more letters populating the scene)
+          nameChars.forEach((nc) => {
+            let angle = nc.baseAngle + time * 0.32 * nc.speedMul;
+            let x = Math.cos(angle) * nc.r;
+            let z0 = Math.sin(angle) * nc.r;
+            let y = z0 * Math.sin(nc.incl);
+            let z = z0 * Math.cos(nc.incl);
+
+            const proj = project3D(x, y, z);
+            nc.lastScreen = {
+              x: proj.screenX,
+              y: proj.screenY,
+              scale: proj.scale,
+              clipped: proj.clipped,
+            };
+
+            renderList.push({
+              z: proj.z,
+              draw: () => {
+                if (proj.clipped) return;
+                if (proj.z > 10 && Math.hypot(x, y) < sunRadiusWorld * 1.1)
+                  return;
+
+                let fontSize = Math.max(14, 26 * proj.scale);
+                ctx.save();
+                ctx.font = `800 ${fontSize}px 'Caveat', cursive, serif`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = proj.z < 0 ? "#ffffff" : "#ffd700";
+                ctx.shadowColor = "#ff9900";
+                ctx.shadowBlur = proj.z < 0 ? 16 : 5;
+                ctx.fillText(nc.char, proj.screenX, proj.screenY);
+                ctx.restore();
+              },
+            });
+          });
+
+          // 4. SORT BY REAL Z-DEPTH (Far items Z>0 rendered first, close items Z<0 rendered last)
+          renderList.sort((a, b) => b.z - a.z);
+
+          // 5. DRAW ALL ITEMS
+          renderList.forEach((item) => item.draw());
+        }
+
+        // Start continuous 3D loop on window load
+        window.onload = function () {
+          render();
+        };
+      })();
+    </script>
+  </body>
+</html>
